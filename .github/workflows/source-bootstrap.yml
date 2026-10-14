@@ -1,0 +1,30 @@
+name: One-time NEXUS source import
+on:
+  push:
+    paths:
+      - bootstrap/payload.part06
+permissions:
+  contents: write
+jobs:
+  import-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and extract source payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat bootstrap/payload.part0{1,2,3,4,5,6} | base64 --decode > /tmp/nexus-source.tar.xz
+          echo '6e6fb1df6ca150da0aa29494b2cd485acca84cddf827d248629ce2e30bf62655  /tmp/nexus-source.tar.xz' | sha256sum --check
+          tar -tf /tmp/nexus-source.tar.xz | grep -vE '(^\\.\\./|/\\.\\./|^/)' > /tmp/nexus-file-list
+          test "$(wc -l < /tmp/nexus-file-list)" -ge 25
+          tar -xJf /tmp/nexus-source.tar.xz
+          rm -rf bootstrap
+          rm .github/workflows/source-bootstrap.yml
+      - name: Commit sources to main
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add -A
+          git commit -m "feat: import NEXUS v0.1 foundation"
+          git push origin HEAD:main
