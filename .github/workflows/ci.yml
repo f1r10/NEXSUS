@@ -1,6 +1,7 @@
 name: NEXUS CI
 on:
   push:
+    branches: [main, 'feature/**']
   pull_request:
 jobs:
   backend:
@@ -10,11 +11,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run API tests
+      - name: Install API and test dependencies
         working-directory: backend
-        run: |
-          pip install -r requirements-dev.txt
-          pytest -q
+        run: pip install -r requirements-dev.txt
+      - name: Run security and API tests
+        working-directory: backend
+        run: python -m pytest -q
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -22,8 +24,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Build frontend
+      - name: Install frontend packages
         working-directory: frontend
-        run: |
-          npm install
-          npm run build
+        run: npm install --no-audit --no-fund
+      - name: Next.js production build
+        working-directory: frontend
+        run: npm run build
