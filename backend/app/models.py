@@ -175,3 +175,78 @@ class TransformJob(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SocialProfileSnapshot(Base):
+    """Case-scoped, immutable profile observation; never an identity assertion."""
+    __tablename__ = "social_profile_snapshots"
+    id: Mapped[object] = mapped_column(Uuid, primary_key=True, default=new_id)
+    case_id: Mapped[object] = mapped_column(Uuid, ForeignKey("cases.id"), nullable=False, index=True)
+    account_id: Mapped[object] = mapped_column(Uuid, ForeignKey("case_social_accounts.id"), nullable=False)
+    evidence_id: Mapped[object] = mapped_column(Uuid, ForeignKey("evidence.id"), nullable=False)
+    username: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    biography: Mapped[str | None] = mapped_column(Text)
+    follower_count: Mapped[int | None] = mapped_column(Integer)
+    following_count: Mapped[int | None] = mapped_column(Integer)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+
+
+class SocialPost(Base):
+    """A post observed in authorized case evidence; immutable per platform ID."""
+    __tablename__ = "social_posts"
+    __table_args__ = (UniqueConstraint("case_id", "author_account_id", "platform_post_id", name="uq_case_social_post"),)
+    id: Mapped[object] = mapped_column(Uuid, primary_key=True, default=new_id)
+    case_id: Mapped[object] = mapped_column(Uuid, ForeignKey("cases.id"), nullable=False, index=True)
+    author_account_id: Mapped[object] = mapped_column(Uuid, ForeignKey("case_social_accounts.id"), nullable=False)
+    platform_post_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_id: Mapped[object] = mapped_column(Uuid, ForeignKey("evidence.id"), nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+
+
+class SocialComment(Base):
+    __tablename__ = "social_comments"
+    __table_args__ = (UniqueConstraint("case_id", "post_id", "platform_comment_id", name="uq_case_social_comment"),)
+    id: Mapped[object] = mapped_column(Uuid, primary_key=True, default=new_id)
+    case_id: Mapped[object] = mapped_column(Uuid, ForeignKey("cases.id"), nullable=False, index=True)
+    post_id: Mapped[object] = mapped_column(Uuid, ForeignKey("social_posts.id"), nullable=False)
+    author_account_id: Mapped[object] = mapped_column(Uuid, ForeignKey("case_social_accounts.id"), nullable=False)
+    platform_comment_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_id: Mapped[object] = mapped_column(Uuid, ForeignKey("evidence.id"), nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+
+
+class AccountAttribution(Base):
+    """Reviewed claim linking an account to a person; no automatic attribution."""
+    __tablename__ = "social_account_attributions"
+    id: Mapped[object] = mapped_column(Uuid, primary_key=True, default=new_id)
+    case_id: Mapped[object] = mapped_column(Uuid, ForeignKey("cases.id"), nullable=False, index=True)
+    account_id: Mapped[object] = mapped_column(Uuid, ForeignKey("case_social_accounts.id"), nullable=False, index=True)
+    entity_id: Mapped[object] = mapped_column(Uuid, ForeignKey("case_entities.id"), nullable=False)
+    evidence_id: Mapped[object] = mapped_column(Uuid, ForeignKey("evidence.id"), nullable=False)
+    review_status: Mapped[str] = mapped_column(String(32), default="proposed", nullable=False)
+    proposed_by: Mapped[object] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    reviewed_by: Mapped[object | None] = mapped_column(Uuid, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BinaryEvidence(Base):
+    """Case-scoped metadata for immutable object-store originals."""
+    __tablename__ = "binary_evidence"
+    __table_args__ = (Index("ix_binary_evidence_case_hash", "case_id", "sha256"),)
+    id: Mapped[object] = mapped_column(Uuid, primary_key=True, default=new_id)
+    case_id: Mapped[object] = mapped_column(Uuid, ForeignKey("cases.id"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    object_key: Mapped[str] = mapped_column(String(300), unique=True, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    media_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    storage_domain: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_by: Mapped[object] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
