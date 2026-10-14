@@ -27,7 +27,7 @@ from app.security import (
     require_admin, verify_password,
 )
 
-app = FastAPI(title="NEXUS Intelligence Platform", version="0.1.0")
+app = FastAPI(title="NEXUS Intelligence Platform", version="0.2.0")
 origins = [x.strip() for x in os.getenv("NEXUS_CORS_ORIGINS", "http://localhost:3000").split(",") if x.strip()]
 app.add_middleware(
     CORSMiddleware, allow_origins=origins, allow_credentials=True,
@@ -126,7 +126,7 @@ def entity_dict(item: CaseEntity):
 
 @app.get("/api/v1/health")
 def health():
-    return {"status": "ok", "service": "nexus", "version": "0.1.0"}
+    return {"status": "ok", "service": "nexus", "version": "0.2.0"}
 
 
 @app.get("/api/v1/auth/setup-required")
@@ -474,3 +474,11 @@ def case_audit(case_id: UUID, user: User = Depends(current_user), db: Session = 
                         .order_by(AuditEvent.created_at.desc()).limit(100)).all()
     return [{"action": e.action, "resource_id": e.resource_id, "actor_id": str(e.actor_id),
              "created_at": e.created_at.isoformat()} for e in events]
+
+
+# Case-scoped Person Intelligence and Social Graph API (v0.2)
+from app.routers.person_intelligence import router as person_router  # noqa: E402
+app.include_router(person_router)
+
+from app.routers.evidence_files import router as files_router  # noqa: E402
+app.include_router(files_router)

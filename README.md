@@ -1,96 +1,68 @@
 # NEXUS Intelligence Platform
 
-**Status: v0.1 engineering foundation — not production-ready.**
+**Current milestone: v0.2 development preview. Not production-ready.**
 
-NEXUS is an offline-first, case-isolated investigation workspace. The initial, demonstrable vertical slice provides an Azerbaijani Next.js UI, a FastAPI/PostgreSQL backend, protected user sessions, Case membership authorization, case-scoped entities, case-scoped text evidence, proposed/reviewed relationships, a visual graph explorer, case-scoped social accounts/follow observations, and a single explicitly local graph transform.
+NEXUS is an offline-first, **Case-isolated** investigative evidence workspace. It is designed to unify people, source-backed claims, accounts, social activity and relationship graphs without conflating potential identity matches with verified facts.
 
-NEXUS does **not** yet collect real social-media data, bypass site access restrictions, import PDFs, parse OCR, serve maps, or perform AI entity resolution. There is no live RapidAPI integration in this milestone. The app makes no claims that people with a social relationship are personally acquainted; graph edges retain review status and, when confirmed, require evidence.
+## Current capabilities
 
-## Architecture
+- Azerbaijani Next.js frontend with workspace/Case navigation, Person Intelligence profile, local graph exploration, social activity, evidence and review UI.
+- FastAPI + PostgreSQL backend with opaque HttpOnly sessions, CSRF checks, Case membership authorization and audit events.
+- Case-scoped entities, assertions, text evidence, proposed/reviewed relationships and local `graph.neighbors` transform.
+- Social accounts and directed follow observations, source-backed profile snapshots, posts, comments and **human-reviewed** account-to-person attribution. Profile API only lists **approved** attributed accounts.
+- Case-filtered person search across only the user's member Cases. Global entity IDs do **not** grant global access.
+- Case-scoped original-file upload/download to private MinIO (20 MB per file, SHA-256; **no cross-Case deduplication yet**).
+- Automated API tests, frontend production build and Docker Compose syntax check in CI.
 
-- `frontend/` — Next.js App Router + TypeScript, Azerbaijani interface, Arial typography, responsive layout.
-- `backend/` — FastAPI, SQLAlchemy 2, PostgreSQL, server-side opaque-cookie sessions with CSRF protection, case authorization.
-- `backend/tests/` — regression tests for security boundaries and core workflows.
-- `docker-compose.yml` — PostgreSQL, backend, frontend. Ports bound to `127.0.0.1` by default.
-- `.github/workflows/ci.yml` — backend tests and frontend build.
-- `docs/` — design boundaries, API, operational notes, roadmap.
+**Not included:** live RapidAPI/social connectors, private-account bypass, OCR, automated photo identification, multi-party approval, advanced identity resolution, import processing workers, graph-scale benchmarks, PostgreSQL RLS, WORM/virus scanning, full backup/restore, Alembic migrations or a full security audit. Do not use real classified investigations with this development preview.
 
-## Local quick start (Docker)
+## Technology
 
-Requires Docker Engine and Docker Compose plugin.
+- `backend/` — FastAPI, SQLAlchemy, PostgreSQL; new Case-based APIs in `backend/app/routers/`.
+- `frontend/` — Next.js, TypeScript, Azerbaijani interface and minimal Arial styling.
+- `docker-compose.yml` — private PostgreSQL, private MinIO, bucket initialization, API and web frontend.
+- `docs/` — architecture and v0.2 endpoint notes.
+
+## Run on a development machine
+
+Requires Docker Engine + Docker Compose plugin. Clone the repository and configure `.env`:
 
 ```bash
 cp .env.example .env
-# Set secure values for POSTGRES_PASSWORD and NEXUS_BOOTSTRAP_TOKEN.
-# Example generators:
-python -c "import secrets; print(secrets.token_urlsafe(40))"
+# Generate independent secret values. Never commit .env.
+python3 -c 'import secrets; print(secrets.token_urlsafe(40))'
+# Set POSTGRES_PASSWORD, NEXUS_BOOTSTRAP_TOKEN and NEXUS_S3_SECRET_KEY in .env.
+docker compose config --quiet
 docker compose up --build -d
 docker compose ps
 ```
 
-Open `http://localhost:3000` and complete **İlkin quraşdırma** with the value of `NEXUS_BOOTSTRAP_TOKEN`, a local administrator email and a password with at least 12 characters. API health: `http://localhost:8000/api/v1/health`; OpenAPI: `http://localhost:8000/docs`.
+Frontend: <http://localhost:3000>  
+API health: <http://localhost:8000/api/v1/health>  
+OpenAPI: <http://localhost:8000/docs>
 
-**Security:** The default compose setup is strictly a local development deployment. Do not bind it to a public address or add real operational data. Put TLS, secure cookies, backup, access policies, migration management, virus scanning, audit integrity protection, secrets management, and independent security verification in place before any production deployment. Use `NEXUS_COOKIE_SECURE=true` behind HTTPS; for production put frontend/API under one controlled HTTPS origin.
+The first admin setup requires the `NEXUS_BOOTSTRAP_TOKEN` (32+ characters). Login uses HttpOnly cookie sessions and CSRF protection. Only Cases of which the current user is a member are visible; admin status is **not** a blanket evidence-reading permission.
 
-## Local quick start (without Docker)
+**Important network configuration:** The Compose example binds frontend and API only to `127.0.0.1` for local development; MinIO has **no host port**. Do not expose the stack to the internet. To use it over a secured internal network later, implement TLS reverse proxy, safe cookies, operational backups, scoped S3 credentials, secrets management, security review and authorization tests first.
 
-Backend (Python 3.12+):
-
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-dev.txt
-export DATABASE_URL=sqlite:///./nexus.db
-export NEXUS_BOOTSTRAP_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(40))')"
-python -m app.init_db
-uvicorn app.main:app --reload --port 8000
-```
-
-For frontend, in another terminal:
-
-```bash
-cd frontend
-npm install
-NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
-```
-
-SQLite is supported for local experimentation/tests only, not the production backend.
-
-## Tests
+## Testing
 
 ```bash
 cd backend
 pip install -r requirements-dev.txt
-pytest -q
+python -m pytest -q
 ```
 
-A GitHub Actions workflow also installs frontend dependencies and performs a production build. CI has not been executed until this project is pushed to GitHub.
+All file-storage API tests use an isolated in-memory S3 test double. Tests do **not** certify that a MinIO image has been pulled or that a real deployment works; Docker Compose is syntactically validated in GitHub CI.
 
-## Implemented permission boundaries
+## Development and limitations
 
-- The first administrator account requires an environment bootstrap token (>=32 chars) and is created once.
-- All normal mutations require an authenticated session plus a CSRF header.
-- Users only see Cases where they are members. A platform administrator does **not** automatically receive access to existing classified Case evidence.
-- `viewer` is read-only; `analyst` and `reviewer` can propose data; only `reviewer` or `case_manager` can review relationships; only `case_manager` can manage membership.
-- Cross-case foreign keys supplied to entity relationship or social-follow endpoints are rejected, even if the current user can access both cases.
-- Verified relationships cannot be approved without a case-scoped evidence reference.
-- No external connector may run in this version. The sole transform `graph.neighbors` traverses approved/proposed local case records and returns review statuses in the graph view.
+The database currently uses development-only `create_all` on startup. It adds missing tables, but cannot migrate existing columns safely. A versioned Alembic migration baseline is required before supported upgrades and production deployments. File originals are stored under random Case-specific keys; storage-domain deduplication and immutability enforcement are **future work**. The uploaded-file endpoint checks extensions and size but does not replace malware scanning or content parsing isolation.
 
-**Limitations:** Application-level access checks are implemented, but production-grade PostgreSQL RLS, classification-level policy engine, multi-person approval, global matching notifications, ShareGrant workflows, immutable MinIO evidence ingest, append-only audit integrity, cryptographic domain isolation, and encryption key lifecycles are future work.
+The only active Transform is **local** `graph.neighbors`. OSINT provider integrations must be added through approved connectors, with authorization, terms of service, budgets and durable workers. No API output establishes that two social accounts refer to the same person until evidence-backed analyst review approves that attribution. A directed `FOLLOWS` relationship is not proof of real-world acquaintance.
 
-## Documented development sequence
-
-1. v0.1 — API + frontend + core Case isolation (this milestone).
-2. Schema versioning (Alembic), PostgreSQL RLS + policy decision tests, bootstrapping hardening.
-3. EvidenceFile / ExtractionRun / SourceFragment, MinIO immutable object ingest, storage-domain encryption + dedup boundaries.
-4. Connector registry, signed manifests, controlled RapidAPI integrations **where permitted**, quota/cost/rate limits, durable background queue.
-5. SocialPost / SocialComment / snapshots + entity resolution and human review/merge/unmerge.
-6. Graph traversal and large graph visualization, full Person Intelligence profile and Investigation Canvas.
-7. Local OCR/NER, semantic search, timeline, maps, audited exports, backup/restore and performance benchmarks.
-
-For engineering detail see `docs/ARCHITECTURE.md`.
+Read `docs/ARCHITECTURE.md` and `docs/PERSON_INTELLIGENCE.md` for data contracts and next work.
 
 ## Responsible use
 
-Only collect data you are authorized to access, in accordance with applicable law and provider terms. Avoid storing secrets, personal data, or real evidence in this public repository. NEXUS is intended for legitimate investigative analysis with documented purpose, scoped access and human review.
+Collect and process personal information only with a documented legitimate purpose, a lawful basis and permissions appropriate to the source. Keep actual secrets and sensitive case material outside this **public** GitHub repository.
